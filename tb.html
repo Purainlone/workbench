@@ -1883,6 +1883,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2 primary" onclick="cloudBackupLocal()" title="把云端数据 + 座位表 / 通讯录 / 教研库 / 专著库 打包下载到本地，并在浏览器内保留最近 5 份">💾 一键备份到本地</button>
         <button class="btn2" onclick="cloudBakRestore()" title="从浏览器内保留的最近 5 份备份里挑一份恢复">↩︎ 从本地备份恢复</button>
         <span style="font-size:12px;color:#76867e">2.6.56 起：座位表 / 通讯录 / 教研库 / 专著库 已并入云端同步，不再只存本机</span>
+        <div style="font-size:12px;color:#76867e;margin-top:4px">2.6.57 起：首页新增「📌 桌面标签」—— 弹出独立小窗，主窗口最小化它也留在桌面上，显示日期周次 / 值班备忘 / 当前与下节课 / 未交作业名单（右上角 ⚙ 可勾选要显示哪些板块）</div>
       </div>
       <div class="syncdesc" style="margin-top:6px">旧通道（微信云开发）：<input id="mpSyncUrl" placeholder="云接入地址（选「微信云开发」时使用）" style="width:60%;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px;vertical-align:middle">
         <input id="mpSyncToken" placeholder="同步钥匙" style="width:140px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px;vertical-align:middle"></div>
@@ -8015,17 +8016,31 @@ function syncSeats(){
 }
 
 /* ---------- 通讯录（只读展示） ---------- */
+/* 2.6.57 修复：资料库那张「校园通讯录」表拉到空结果时，**绝不覆盖**本机的通讯录。
+   旧行为：云端表空 → DATA.contacts 被清成空数组 → 上传云端时又因「空数组不写」而跳过，
+   于是 114 人通讯录一旦被清空就永久丢失、且无法自愈。现在改为：只有真正拉到非空数据才覆盖；
+   拉空或读取失败一律保留本机（页面内置的 114 人就是兜底）。 */
 function loadContactsFromDB(){
+  function keepLocal(why){
+    if(!(DATA.contacts && DATA.contacts.length)) return false;
+    var sub=document.querySelector('#s-dir .sub');
+    if(sub)sub.textContent='共 '+DATA.contacts.length+' 人 · 点击号码可直接拨打'+(why?'（资料库无数据，沿用本机）':'');
+    renderDir();
+    if(why) console.warn('[通讯录] '+why+'，已保留本机数据');
+    return true;
+  }
   pullContacts(function(rows){
-    DATA.contacts=rows.map(function(r){
+    var arr=(rows||[]).map(function(r){
       return {姓名:r['姓名']||'',部门或年级组:r['部门或年级组']||'其他',
               职务或任教学科:r['职务或任教学科']||'',手机号:r['手机号']||'',
               是否常用:!!r['是否常用'],备注:r['备注']||''};
     }).filter(function(c){return c.姓名});
+    if(!arr.length){ keepLocal('资料库通讯录表为空'); return }
+    DATA.contacts=arr;
     var sub=document.querySelector('#s-dir .sub');
     if(sub)sub.textContent='共 '+DATA.contacts.length+' 人 · 点击号码可直接拨打';
     renderDir();
-  },function(err){dbFail('通讯录',err);renderDir()});
+  },function(err){ keepLocal('读取失败：'+((err&&err.message)||err||'')) });
 }
 
 /* ---------- 午托值班 ---------- */
@@ -13248,6 +13263,14 @@ function renderHome(){
   };
   chips.appendChild(cwk);
   hero.appendChild(chips);
+  /* 2.6.57 桌面标签入口：点一下弹出独立小窗，主窗口最小化它也还在 */
+  var dtRow=el('div','hm-chips');
+  var dtb=el('button','btn2 sm','📌 桌面标签');
+  dtb.id='dtBtn';
+  dtb.onclick=function(){dtToggle()};
+  dtRow.appendChild(dtb);
+  hero.appendChild(dtRow);
+  setTimeout(dtSyncBtn,0);
   gf.appendChild(hero);
 
   /* ---------- 2. 两栏：待办 / 每日一句 ---------- */
@@ -13474,6 +13497,8 @@ function renderHome(){
     var dstr=now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 '+hmWDName(now);
     dt.textContent=dstr+'　·　今天也要好好上课';
   }
+  /* 首页重画完顺手把桌面标签也刷一次，登记完作业那边立刻就变 */
+  try{dtPush()}catch(e){}
 }
 
 /* 今天的我的课：从课表合并数据里挑出"是否我上"的 */
@@ -13491,6 +13516,271 @@ function hmTodayMyClasses(now){
   });
   return out;
 }
+
+/* ================= 2.6.57 桌面标签（独立小窗，最小化也留在桌面上） =================
+   它是一个由 window.open 打开的**独立操作系统窗口**：主窗口最小化、切到别的程序，
+   它都还在桌面上。数据每 30 秒从主窗口实时取一次（同源直读，不走网络）。
+   主窗口关掉后，小窗显示最后一次快照并标「已停止更新」，不会变成空白。
+   开关与显示项存在 localStorage：wb_desktag（on / date / alert / tt / hw / 位置）。 */
+var DT_WIN=null;
+function dtCfg(){
+  var d={on:1,date:1,alert:1,tt:1,hw:1,w:340,h:640,x:null,y:null};
+  try{var s=JSON.parse(localStorage.getItem('wb_desktag')||'{}');for(var k in s)if(k in d)d[k]=s[k]}catch(e){}
+  return d;
+}
+function dtSave(c){try{localStorage.setItem('wb_desktag',JSON.stringify(c))}catch(e){}}
+function dtEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){var m={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'};return m[c]})}
+function dtMins(d){var n=d||new Date();return n.getHours()*60+n.getMinutes()}
+/* 把 "8:20" / "第1节 8:20" / "8:20-9:00" 解析成分钟 */
+function dtMinOf(t){
+  var m=String(t||'').replace(/\s/g,'').match(/(\d{1,2}):(\d{2})/);
+  return m?(+m[1])*60+(+m[2]):null;
+}
+/* 一节课的时间区间 [起,止]（分钟）。优先用课表里的「时间」列，没有就按节次标题算 40 分钟 */
+function dtRange(w,n){
+  var t='';
+  try{(DATA.schedule||[]).forEach(function(r){if(r.星期===w&&+r.节次===n&&r.时间)t=r.时间})}catch(e){}
+  var m=String(t).replace(/\s/g,'').match(/(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/);
+  if(m)return [(+m[1])*60+(+m[2]),(+m[3])*60+(+m[4])];
+  var lbl='';
+  PERIODS.forEach(function(p){if(p.n===n)lbl=p.t});
+  var v=dtMinOf(lbl);
+  return v==null?null:[v,v+40];
+}
+function dtPeriods(now){
+  var wi=ttWDIndex(now.getDay());
+  if(wi>4)return {now:null,next:null,my:[]};
+  var w=WD_ALL[wi],mins=dtMins(now),cur=null,nxt=null,my=[];
+  if(!w)return {now:null,next:null,my:[]};
+  PERIODS.forEach(function(p){
+    var c=ttMerged(w,p.n),r=dtRange(w,p.n);
+    if(!c||!c.科目)return;
+    var o={n:p.n,p:p.t,科目:c.科目,教师:c.任课教师||'',mine:!!c.是否我上,s:r?r[0]:null,e:r?r[1]:null};
+    if(r&&mins>=r[0]&&mins<r[1])cur=o;
+    if(!nxt&&r&&r[0]>mins)nxt=o;
+    if(c.是否我上)my.push(o);
+  });
+  return {now:cur,next:nxt,my:my};
+}
+function dtDayStr(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+function dtDaysTo(ds,now){
+  var a=new Date(ds+'T00:00:00'),b=new Date(dtDayStr(now)+'T00:00:00');
+  var n=Math.round((a-b)/864e5);
+  if(n===0)return '今天';if(n===1)return '明天';if(n===2)return '后天';
+  return n+' 天后';
+}
+function dtDuty(now){
+  var t=dtDayStr(now),today=[],next=null;
+  (DATA.duty||[]).forEach(function(x){
+    if(!x||!x.日期||x.状态==='已完成')return;
+    if(x.日期===t)today.push(x);
+    else if(x.日期>t&&!next)next=x;
+  });
+  return {today:today,next:next};
+}
+function dtMemos(now){
+  return (RM_ROWS||[]).filter(function(r){return !r.完成}).map(function(r){
+    var dt=r.到时;
+    return {t:r.标题||'(无标题)',imp:!!r.重要,over:!!(dt&&dt.getTime()<now.getTime()),
+            due:dt?((dt.getMonth()+1)+'/'+dt.getDate()+' '+('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2)):''};
+  }).sort(function(a,b){
+    return ((b.imp?1:0)-(a.imp?1:0))||((b.over?1:0)-(a.over?1:0));
+  }).slice(0,6);
+}
+/* 主窗口调用：把当前该显示的一切打包成纯数据 */
+function dtData(){
+  var now=new Date(),tt=dtPeriods(now),hw={weekN:0,pastN:0,week:[],past:[]};
+  try{var r=hmHwUndone();hw={weekN:r.weekN,pastN:r.pastN,week:(r.week||[]).slice(0,4),past:(r.past||[]).slice(0,2)}}catch(e){}
+  return {date:(now.getMonth()+1)+'月'+now.getDate()+'日',wd:hmWDName(now),week:NOW_WEEK,
+          duty:dtDuty(now),memos:dtMemos(now),now:tt.now,next:tt.next,my:tt.my,
+          hw:hw,cfg:dtCfg(),ts:now.getTime()};
+}
+function dtRenderHTML(d){
+  var c=d.cfg||{},h='',mins=dtMins();
+  function sec(t,b){return '<div class="dt-sec"><div class="dt-h">'+t+'</div>'+b+'</div>'}
+  if(c.date){
+    h+=sec('📅 '+dtEsc(d.date)+' '+dtEsc(d.wd),'<div class="dt-week">第 '+d.week+' 周</div>');
+  }
+  if(c.alert){
+    var b='';
+    (d.duty.today||[]).forEach(function(x){
+      b+='<div class="dt-row red">⏰ 今天值班 '+dtEsc(x.时段||'12:00-14:00')+'</div>';
+    });
+    if(!b&&d.duty.next){
+      b+='<div class="dt-row">⏰ 下次值班 '+dtDaysTo(d.duty.next.日期,new Date())+' · '+dtEsc(d.duty.next.日期)+' '+dtEsc(d.duty.next.时段||'')+'</div>';
+    }
+    if(d.memos.length){
+      b+='<div class="dt-sub">备忘 · 未完成</div>';
+      d.memos.forEach(function(m){
+        b+='<div class="dt-row'+(m.over?' red':'')+'">'+(m.imp?'🔴 ':'· ')+dtEsc(m.t)+
+           (m.due?'<span class="dt-t">'+m.due+'</span>':'')+(m.over?'<span class="dt-tag">已过</span>':'')+'</div>';
+      });
+    }
+    if(!b)b='<div class="dt-empty">今天没有值班和备忘</div>';
+    h+=sec('🔔 重要提醒',b);
+  }
+  if(c.tt){
+    var b2='';
+    if(d.now){
+      var left=d.now.e!=null?Math.max(0,d.now.e-mins):null;
+      b2+='<div class="dt-now"><div>正在上 · <b>'+dtEsc(d.now.科目)+'</b>'+(d.now.mine?'<span class="dt-mine">我的课</span>':'')+'</div>'+
+          '<div class="dt-t">'+dtEsc(d.now.p)+(left!=null?' · 还有 '+left+' 分钟':'')+'</div></div>';
+    }else{
+      b2+='<div class="dt-row">现在 · 课间 / 非上课时间</div>';
+    }
+    if(d.next){
+      var to=d.next.s!=null?Math.max(0,d.next.s-mins):null;
+      b2+='<div class="dt-row">下节 · <b>'+dtEsc(d.next.科目)+'</b> <span class="dt-t">'+dtEsc(d.next.p)+
+          (to!=null?' · '+to+' 分钟后':'')+'</span>'+(d.next.mine?'<span class="dt-mine">我的课</span>':'')+'</div>';
+    }
+    if(d.my.length){
+      var nx=null;
+      d.my.forEach(function(x){if(!nx&&x.s!=null&&x.s>mins)nx=x});
+      b2+='<div class="dt-sub">今天我的课 '+d.my.length+' 节'+(nx?' · 下一节 '+dtEsc(nx.科目):' · 已上完')+'</div>'+
+          '<div class="dt-chips">'+d.my.map(function(x){
+            return '<span class="dt-chip'+(x===nx?' on':'')+'">'+dtEsc(String(x.p).split(' ')[0])+' '+dtEsc(x.科目)+'</span>';
+          }).join('')+'</div>';
+    }
+    h+=sec('📚 课程',b2);
+  }
+  if(c.hw){
+    var b3='';
+    if(!d.hw.weekN&&!d.hw.pastN){
+      b3='<div class="dt-empty">全部交齐 ✅</div>';
+    }else{
+      b3+='<div class="dt-row"><b>本周未交 '+d.hw.weekN+' 人次</b>'+(d.hw.pastN?' · 过往 '+d.hw.pastN+' 人次':'')+'</div>';
+      (d.hw.week||[]).forEach(function(it){
+        b3+='<div class="dt-hw"><div class="dt-hw-t">'+dtEsc(it.name)+'<span class="dt-t">'+dtEsc(it.date)+'</span></div>'+
+            '<div class="dt-names">'+it.und.map(function(n){return '<span>'+dtEsc(n)+'</span>'}).join('')+'</div></div>';
+      });
+      if(d.hw.pastN)b3+='<div class="dt-sub">过往还有 '+d.hw.pastN+' 人次没补</div>';
+    }
+    h+=sec('📝 未交作业',b3);
+  }
+  if(!h)h='<div class="dt-empty">四个板块都被隐藏了，点右上角 ⚙ 打开</div>';
+  return h;
+}
+/* 小窗的完整外壳（含自己的样式与 30 秒刷新） */
+function dtShellHTML(){
+  var c=dtCfg();
+  function ck(k,t){return '<label><input type="checkbox" data-k="'+k+'"'+(c[k]?' checked':'')+'>'+t+'</label>'}
+  var s='<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>桌面标签</title><style>'
+   +'*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f2f6f4;color:#22303f;font-size:14px}'
+   +'.dt-top{position:sticky;top:0;background:linear-gradient(135deg,#1a9c5b,#25b46e);color:#fff;padding:10px 12px;display:flex;align-items:center;gap:8px}'
+   +'.dt-title{font-weight:700;font-size:14px}.dt-btns{margin-left:auto;display:flex;gap:6px}'
+   +'.dt-btns button{border:0;background:rgba(255,255,255,.22);color:#fff;width:26px;height:24px;border-radius:6px;cursor:pointer;font-size:13px}'
+   +'.dt-btns button:hover{background:rgba(255,255,255,.38)}'
+   +'.dt-cfg{padding:10px 12px;background:#fff;border-bottom:1px solid #e6ecf0;display:flex;flex-wrap:wrap;gap:10px;font-size:13px}'
+   +'.dt-cfg label{display:flex;align-items:center;gap:4px;cursor:pointer}'
+   +'#dt{padding:10px}.dt-sec{background:#fff;border-radius:12px;padding:11px 12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(20,60,40,.06)}'
+   +'.dt-h{font-weight:700;font-size:13.5px;margin-bottom:8px}.dt-week{font-size:20px;font-weight:800;color:#1a9c5b}'
+   +'.dt-sub{font-size:12px;color:#8b95a5;margin:8px 0 4px}'
+   +'.dt-row{padding:6px 0;border-bottom:1px solid #f0f3f6;font-size:13.5px;line-height:1.5}'
+   +'.dt-row:last-child{border-bottom:0}.dt-row.red{color:#d33c3c}'
+   +'.dt-now{background:#eefaf3;border-left:3px solid #1a9c5b;border-radius:8px;padding:9px 10px;margin-bottom:8px;line-height:1.5}'
+   +'.dt-t{color:#98a2b0;font-size:12px;margin-left:6px}'
+   +'.dt-tag{background:#ffe3e3;color:#d33c3c;font-size:11px;border-radius:5px;padding:1px 5px;margin-left:6px}'
+   +'.dt-mine{background:#1a9c5b;color:#fff;font-size:11px;border-radius:5px;padding:1px 6px;margin-left:6px}'
+   +'.dt-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}'
+   +'.dt-chip{background:#f0f4f8;border-radius:6px;padding:3px 7px;font-size:12px;color:#5a6675}'
+   +'.dt-chip.on{background:#1a9c5b;color:#fff}'
+   +'.dt-hw{margin-top:8px}.dt-hw-t{font-size:13px;font-weight:600}'
+   +'.dt-names{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}'
+   +'.dt-names span{background:#fff3e8;color:#a8601a;border-radius:5px;padding:2px 6px;font-size:12px}'
+   +'.dt-empty{color:#98a2b0;font-size:13px;padding:6px 0}'
+   +'.dt-stale{background:#fff6e5;color:#8a5a12;border-radius:8px;padding:8px 10px;font-size:12.5px;margin-bottom:8px}'
+   +'.dt-foot{color:#98a2b0;font-size:11.5px;text-align:center;padding:6px 0 12px}'
+   +'</style></head><body>'
+   +'<div class="dt-top"><span class="dt-title">📌 桌面标签</span><span class="dt-btns">'
+   +'<button id="dtSet" title="显示哪些板块">⚙</button><button id="dtRef" title="立即刷新">↻</button><button id="dtHide" title="收起标签">×</button>'
+   +'</span></div>'
+   +'<div class="dt-cfg" id="dtCfg" style="display:none">'+ck('date','日期周次')+ck('alert','提醒')+ck('tt','课程')+ck('hw','未交作业')+'</div>'
+   +'<div id="dt"></div><div class="dt-foot" id="dtFoot"></div>'
+   +'<scr'+'ipt>(function(){'
+   +'var box=document.getElementById("dt"),foot=document.getElementById("dtFoot"),op=null;'
+   +'try{op=window.opener}catch(e){}'
+   +'function alive(){try{return !!(op&&!op.closed&&typeof op.dtData==="function")}catch(e){return false}}'
+   +'function paint(){'
+   +' if(alive()){var d=op.dtData();window.__H=op.dtRenderHTML(d);'
+   +'   box.innerHTML=window.__H;'
+   +'   foot.textContent="更新于 "+new Date().toTimeString().slice(0,5)+" · 每 30 秒自动刷新";}'
+   +' else{box.innerHTML=(window.__H||"")+"<div class=\'dt-stale\'>⚠️ 工作台主窗口已关闭，下面是最后一次的数据</div>";'
+   +'   foot.textContent="已停止更新";}'
+   +'}'
+   +'window.dtRepaint=paint;'
+   +'document.getElementById("dtRef").onclick=paint;'
+   +'document.getElementById("dtHide").onclick=function(){try{if(op&&!op.closed&&op.dtOnChildClose)op.dtOnChildClose()}catch(e){};window.close()};'
+   +'document.getElementById("dtSet").onclick=function(){var c=document.getElementById("dtCfg");c.style.display=c.style.display==="none"?"flex":"none"};'
+   +'Array.prototype.forEach.call(document.querySelectorAll("#dtCfg input"),function(i){'
+   +' i.onchange=function(){try{if(op&&!op.closed&&op.dtSetShow)op.dtSetShow(i.getAttribute("data-k"),i.checked)}catch(e){};paint()};'
+   +'});'
+   +'paint();setInterval(paint,30000);'
+   +'})();</scr'+'ipt></body></html>';
+  return s;
+}
+function dtOpen(){
+  try{
+    if(DT_WIN&&!DT_WIN.closed){DT_WIN.focus();return true}
+    var c=dtCfg();
+    var L=(c.x!=null?c.x:(screen.availWidth-c.w-20)),T=(c.y!=null?c.y:80);
+    if(L<0)L=0;if(T<0)T=0;
+    var w=window.open('','wb_desktag','width='+c.w+',height='+c.h+',left='+L+',top='+T+',resizable=yes,scrollbars=yes');
+    if(!w){return false}
+    DT_WIN=w;
+    try{w.document.open();w.document.write(dtShellHTML());w.document.close()}catch(e){}
+    w.focus();
+    return true;
+  }catch(e){return false}
+}
+/* 子窗点 × 时回调 */
+function dtOnChildClose(){DT_WIN=null}
+function dtClose(){
+  try{
+    if(DT_WIN&&!DT_WIN.closed){
+      try{
+        var x=DT_WIN.screenX,y=DT_WIN.screenY,c=dtCfg();
+        if(typeof x==='number'&&x>-32000&&typeof y==='number'&&y>-32000){c.x=x;c.y=y;dtSave(c)}
+      }catch(e){}
+      DT_WIN.close();
+    }
+  }catch(e){}
+  DT_WIN=null;
+}
+/* 首页按钮：开 ⇄ 关（关 = 记住不再自动弹） */
+function dtToggle(){
+  var c=dtCfg();
+  if(DT_WIN&&!DT_WIN.closed){dtClose();c.on=0;dtSave(c);dtSyncBtn();return}
+  if(!c.on){c.on=1;dtSave(c)}
+  var ok=dtOpen();
+  if(!ok){
+    if(typeof toastMsg==='function')toastMsg('⚠️ 浏览器拦截了弹出窗口：请点地址栏右侧的「已拦截弹窗」→ 始终允许，然后再点一次');
+  }
+  dtSyncBtn();
+}
+/* 小窗里改显示项 */
+function dtSetShow(k,v){var c=dtCfg();c[k]=v?1:0;dtSave(c);return c}
+/* 主窗口数据变了 → 让小窗立刻重画 */
+function dtPush(){
+  try{if(DT_WIN&&!DT_WIN.closed&&typeof DT_WIN.dtRepaint==='function')DT_WIN.dtRepaint()}catch(e){}
+}
+/* 页面打开后自动弹（被拦截就静默，靠首页按钮手动开） */
+function dtAutoOpen(){
+  var c=dtCfg();
+  if(!c.on)return;
+  setTimeout(function(){try{dtOpen();dtSyncBtn()}catch(e){}},1200);
+}
+/* 首页按钮文案跟着状态走 */
+function dtSyncBtn(){
+  var b=document.getElementById('dtBtn');
+  if(!b)return;
+  var on=!!(DT_WIN&&!DT_WIN.closed);
+  b.textContent=on?'📌 收起桌面标签':'📌 桌面标签';
+  b.title=on?'收起（也可以直接在小窗上点 ×）':'弹出一个独立小窗：日期周次 / 值班备忘 / 课程 / 未交作业，主窗口最小化它也还在';
+}
+/* 主窗口关掉时顺便收起小窗，避免留下空壳 */
+window.addEventListener('beforeunload',function(){try{dtClose()}catch(e){}});
+/* 上次开着的话，这次进页面自动弹出来（被浏览器拦截就静默，首页按钮照样能手动开） */
+setTimeout(function(){try{dtAutoOpen()}catch(e){}},2500);
 
 /* 首页勾掉待办 */
 var HM_JUST_DONE=null;   /* 刚勾掉的那条，留在列表里 1.6 秒做个视觉反馈 */
