@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>孩子作业查询</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; background:#f0f4f3; min-height:100vh; color:#22303f; }
+  .hd { background:linear-gradient(135deg,#1a9c5b,#25b46e); color:#fff; padding:28px 20px 22px; border-radius:0 0 22px 22px; }
+  .hd .hello { font-size:13px; opacity:.85; }
+  .hd .name { font-size:26px; font-weight:800; margin-top:4px; }
+  .hd .sub { font-size:12px; opacity:.8; margin-top:6px; }
+  .card { background:#fff; border-radius:16px; margin:14px 14px 0; padding:16px; box-shadow:0 2px 10px rgba(20,60,40,.06); }
+  .score-card { display:flex; align-items:center; gap:14px; }
+  .score-num { font-size:34px; font-weight:800; }
+  .score-num.pos { color:#12a150; } .score-num.neg { color:#e5484d; } .score-num.zero { color:#6b7688; }
+  .score-label { font-size:13px; color:#6b7688; line-height:1.6; }
+  .t2 { font-size:15px; font-weight:700; margin-bottom:10px; }
+  .hw { display:flex; align-items:center; justify-content:space-between; padding:11px 2px; border-bottom:1px solid #f0f2f5; }
+  .hw:last-child { border-bottom:0; }
+  .hw .l { font-size:15px; font-weight:600; }
+  .hw .d { font-size:12px; color:#9aa3b2; margin-top:2px; }
+  .badge { min-width:44px; text-align:center; padding:5px 10px; border-radius:999px; font-size:14px; font-weight:700; color:#fff; }
+  .b-y { background:#12a150; } .b-l { background:#1f6feb; } .b-z { background:#f0a30a; } .b-c { background:#e5484d; } .b-n { background:#cfd8e3; color:#6b7688; }
+  .tip { font-size:12px; color:#9aa3b2; text-align:center; padding:18px 0 30px; line-height:1.7; }
+  .err { text-align:center; padding:70px 30px; }
+  .err .e1 { font-size:40px; } .err .e2 { font-size:16px; font-weight:700; margin-top:12px; }
+  .err .e3 { font-size:13px; color:#9aa3b2; margin-top:8px; line-height:1.7; }
+</style>
+</head>
+<body>
+<div id="app"><div class="err"><div class="e1">⏳</div><div class="e2">正在加载…</div></div></div>
+<script>
+(function(){
+  var q=new URLSearchParams(location.search);
+  var k=q.get('k')||'';
+  var app=document.getElementById('app');
+  /* 新站（GitHub Pages）没有平台通行码机制，只校验查询码本身；
+     兼容带 sharecode 的旧链接，有也不影响 */
+  if(!/^[a-f0-9]{8}$/.test(k)){
+    app.innerHTML='<div class="err"><div class="e1">🔗</div><div class="e2">请通过老师发的二维码打开</div><div class="e3">直接打开本页看不到任何信息</div></div>';
+    return;
+  }
+  fetch('./kid_'+k+'.json',{cache:'no-store'}).then(function(r){
+    if(!r.ok) throw 0;
+    return r.json();
+  }).then(function(d){
+    var cls=d.score>0?'pos':(d.score<0?'neg':'zero');
+    var sp=d.score>0?'+':'';
+    var rows=d.hw.map(function(h){
+      var b=h.level==='优'?'b-y':(h.level==='良'?'b-l':(h.level==='中'?'b-z':(h.level==='差'?'b-c':'b-n')));
+      var txt=h.level||'未登记';
+      return '<div class="hw"><div><div class="l">'+h.item+'</div><div class="d">'+h.date+'</div></div><div class="badge '+b+'">'+txt+'</div></div>';
+    }).join('');
+    if(!d.hw.length) rows='<div style="font-size:14px;color:#9aa3b2;padding:10px 0">最近还没有作业登记</div>';
+    app.innerHTML=
+      '<div class="hd"><div class="hello">孩子作业登记查询</div><div class="name">'+d.name+'</div>'+
+      '<div class="sub">更新时间 '+d.updated+' · 数据来自班级登记本</div></div>'+
+      '<div class="card score-card"><div class="score-num '+cls+'">'+sp+d.score+'</div>'+
+      '<div class="score-label">作业积分小计<br><span style="font-size:12px">优 +2 · 良 +1 · 中 0 · 差 −1</span></div></div>'+
+      '<div class="card"><div class="t2">📋 作业登记（'+d.hw.length+' 次）</div>'+rows+'</div>'+
+      '<div class="tip">本页面只显示您孩子的登记情况<br>请保管好二维码，不要转发给他人</div>';
+  },function(){
+    app.innerHTML='<div class="err"><div class="e1">🔍</div><div class="e2">没有找到对应的查询码</div><div class="e3">二维码可能已更新，请联系老师重新获取</div></div>';
+  });
+})();
+</script>
+</body>
+</html>
