@@ -15189,7 +15189,7 @@ function wbPaintVer(){
   try{ if(typeof WB_BUILD_DATE==='undefined')return; var el=document.getElementById('appVer');
     if(el) el.textContent='版本 '+WB_MY_VER+' · '+WB_BUILD_DATE+' · '+WB_BUILD_NO; }catch(_){}
 }
-function wbShowFatal(stage, e){
+function wbShowFatal(stage, e, loc){
   try{
     var box=document.getElementById('wbFatal');
     if(!box){ box=document.createElement('div'); box.id='wbFatal';
@@ -15197,7 +15197,7 @@ function wbShowFatal(stage, e){
     (document.body||document.documentElement).appendChild(box);
     function wbEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
     var msg=(e&&e.stack)?e.stack.split('\n').slice(0,3).map(wbEsc).join('<br>') : wbEsc((e&&(e.message||e.description))||String(e));
-    box.innerHTML='⚠️ <b>工作台启动出错（'+stage+'）</b><br>版本 '+WB_MY_VER+' · '+WB_BUILD_DATE+' · '+WB_BUILD_NO+'<br><code style="word-break:break-all">'+(msg||'未知错误')+'</code><br><button onclick="location.reload(true)" style="margin-top:8px;padding:6px 12px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer">🔄 重新加载</button>';
+    box.innerHTML='⚠️ <b>工作台启动出错（'+stage+'）</b><br>版本 '+WB_MY_VER+' · '+WB_BUILD_DATE+' · '+WB_BUILD_NO+'<br>'+(loc?('位置 '+wbEsc(loc)+'<br>'):'')+'<code style="word-break:break-all">'+(msg||'未知错误')+'</code><br><button onclick="location.replace(location.pathname+\'?fresh=\'+Date.now())" style="margin-top:8px;padding:6px 12px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer">🔄 重新加载</button>';
     box.style.display='block';
   }catch(_){}
 }
@@ -15215,7 +15215,7 @@ window.addEventListener('error', function (ev) {
       try { console.warn('[外部脚本错误，已忽略]', e) } catch (_) {}
       return;
     }
-    wbShowFatal('运行时', e);
+    wbShowFatal('运行时', e, (ev.filename ? String(ev.filename).replace(/^.*\//, '') : '') + ':' + ev.lineno + ':' + ev.colno);
   } catch (_) {}
 });
 window.addEventListener('unhandledrejection', function (ev) {
