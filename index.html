@@ -4,6 +4,9 @@
 <script data-page-node-id="EYVVT80UrWP3q0lMWmA8OK" src="/page/page_comm/inject.js"></script>
 <meta data-page-node-id="dPWv5ithoXMPhRY0suo5kl" charset="UTF-8">
 <meta data-page-node-id="AthKXTdpOt6JU8fIT4dbb5" content="width=device-width,initial-scale=1" name="viewport">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title data-page-node-id="nyYeiIaSPHFt561Wdk8a6H" data-pnid-children="MqVr8nqpAiTKIyv1Htm8Fs">教师工作台</title>
 <link rel="icon" type="image/png" sizes="192x192" href="https://workbuddy-space-static.codebuddy.work/image/LceA2ojHXdnFMGNLVOxKr4.png">
 <link rel="shortcut icon" type="image/png" href="https://workbuddy-space-static.codebuddy.work/image/LceA2ojHXdnFMGNLVOxKr4.png">
@@ -1194,7 +1197,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">版本 v123 · 10-28 · 2.6.51</div>
+  <div class="verline" id="appVer">版本 v126 · 10-29 · 2.6.60</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -13192,6 +13195,7 @@ function stuUndoClear(){
 
 /* ---------- 启动 ---------- */
 (function boot(){
+ try{
   rcLoadTitles();
   rcLoadMode();
   rcLoadViewPrefs();
@@ -13246,7 +13250,36 @@ function stuUndoClear(){
       if(ids.indexOf(ST_DB)>=0)loadST().then(function(){renderStu();renderHW();renderGroup()});
     });
   }
+ }catch(e){
+   try{console.error('[boot] 启动异常',e)}catch(_){}
+   try{wbShowFatal('启动',e)}catch(_){}
+   try{renderHome()}catch(_){}
+   try{renderSeats();renderDir();renderDuty();renderMemo();
+       gpPaintEdit();renderHW();renderGroup();renderStu()}catch(_){}
+ }
 })();
+
+/* 2.6.60 首屏兜底：若 3 秒后今日内容仍为空，先重渲染，再绕过浏览器缓存强制重载一次 */
+setTimeout(function () {
+  try {
+    var hb = document.getElementById('hmBody');
+    if (hb && hb.children.length === 0) {
+      try { renderHome() } catch (e) {}
+      if (document.getElementById('hmBody').children.length === 0) {
+        var key = 'wb_boot_retry_at', last = 0;
+        try { last = +sessionStorage.getItem(key) || 0 } catch (e) {}
+        if (Date.now() - last > 30000) {
+          try { sessionStorage.setItem(key, String(Date.now())) } catch (e) {}
+          var u = location.href.split('#')[0];
+          u += (u.indexOf('?') >= 0 ? '&' : '?') + 'wbv=' + Date.now();
+          location.replace(u);
+        } else {
+          wbShowFatal('首屏', new Error('今日内容未渲染（可能是数据未加载或脚本中断）'));
+        }
+      }
+    }
+  } catch (e) {}
+}, 3000);
 
 
 /* ================= 今日首页 ================= */
@@ -15148,8 +15181,29 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v125';
+var WB_MY_VER = 'v126';
+var WB_BUILD_DATE = '10-29', WB_BUILD_NO = '2.6.60';
+try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
+function wbPaintVer(){
+  try{ if(typeof WB_BUILD_DATE==='undefined')return; var el=document.getElementById('appVer');
+    if(el) el.textContent='版本 '+WB_MY_VER+' · '+WB_BUILD_DATE+' · '+WB_BUILD_NO; }catch(_){}
+}
+function wbShowFatal(stage, e){
+  try{
+    var box=document.getElementById('wbFatal');
+    if(!box){ box=document.createElement('div'); box.id='wbFatal';
+      box.style.cssText='position:fixed;left:12px;right:12px;top:12px;z-index:99999;background:#fdecea;border:1px solid #f2b8b5;color:#8a1c1c;border-radius:12px;padding:12px 14px;font:13px/1.7 system-ui;box-shadow:0 8px 24px rgba(0,0,0,.12)'; }
+    (document.body||document.documentElement).appendChild(box);
+    var msg=(e&&(e.message||e.description))||String(e);
+    box.innerHTML='⚠️ <b>工作台启动出错（'+stage+'）</b><br>版本 '+WB_MY_VER+' · '+WB_BUILD_DATE+' · '+WB_BUILD_NO+'<br><code style="word-break:break-all">'+(msg||'未知错误')+'</code><br><button onclick="location.reload(true)" style="margin-top:8px;padding:6px 12px;border:0;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer">🔄 重新加载</button>';
+    box.style.display='block';
+  }catch(_){}
+}
+window.addEventListener('error', function (ev) {
+  try { var e=ev.error||ev; var stage=(ev.target&&ev.target.src)?('资源 '+ev.target.src):'运行时'; wbShowFatal(stage, e); } catch (_) {}
+});
+window.addEventListener('unhandledrejection', function (ev) { try { wbShowFatal('Promise', ev.reason); } catch (_) {} });
 /* 2.6.60 构建号解析：只认 v数字 格式（如 v124）；旧格式版本串（如 '2.6.15'）返回 0，
    视为「比本页旧」—— 老页面写回的脏标记不再能触发新页面刷新 */
 function wbBuildNum(v) { var m = /^v(\d+)$/.exec(String(v || '')); return m ? +m[1] : 0 }
@@ -15607,7 +15661,11 @@ function syncCycleCore(manual) {
           try { console.warn('[gitee-sync] 本页面是旧版 ' + WB_MY_VER + '，数据中心已是 ' + doc.releaseVer + '，自动刷新') } catch (_v) {}
           try { toastMsg('🔄 工作台已更新到 ' + doc.releaseVer + '，正在自动刷新页面…') } catch (_v2) {}
           GITEE_BUSY = false;
-          setTimeout(function () { location.reload() }, 1500);
+          setTimeout(function () {
+            var _u = location.href.split('#')[0];
+            _u += (_u.indexOf('?') >= 0 ? '&' : '?') + 'wbv=' + Date.now();
+            try { location.replace(_u) } catch (_e) { location.reload() }
+          }, 1200);
           return { skipped: 'stale' };
         }
         /* 云端是旧格式/旧构建号的脏标记：不清数据、不刷新，等本页写回时自然纠正 */
