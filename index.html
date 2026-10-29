@@ -1234,14 +1234,14 @@ table.paper td.l{text-align:left;font-weight:600}
 
     <section data-page-node-id="7tJZLkyTdv9VUP0QZ0xUQK" class="section" id="s-seat">
     <h2 data-page-node-id="zk1BtSKnM2hbNZONyIOZ58"><!--pnid:6LCwNw7Z6wbL4eAqAxGMg3-->座位表</h2>
-    <div data-page-node-id="7uGsIzpZAhOOQH4VBSWH9K" class="sub"><!--pnid:ErMpTTLxDIBZuBU4Z11sVH-->第 <span data-page-node-id="u7cG06naRY4IobDKKqZc1W" id="weekNo"><!--pnid:6HlYEZBaXQXSwZM1k6sErx-->7</span><!--pnid:LaNkXSBXb20YFIzJwruaRF--> 周 · 8 组 × 7 排 · <span id="seatStat">共 50 人</span> · 金色描边为固定座位 · ▲▼ 标注相对上一周的挪动</div>
+    <div data-page-node-id="7uGsIzpZAhOOQH4VBSWH9K" class="sub"><!--pnid:ErMpTTLxDIBZuBU4Z11sVH-->第 <span data-page-node-id="u7cG06naRY4IobDKKqZc1W" id="weekNo"><!--pnid:6HlYEZBaXQXSwZM1k6sErx-->9</span><!--pnid:LaNkXSBXb20YFIzJwruaRF--> 周 · 8 组 × 7 排 · <span id="seatStat">共 50 人</span> · 金色描边为固定座位 · ▲▼ 标注相对上一周的挪动</div>
     <div style="margin:2px 0 10px">
       <button class="btn2 primary" id="actModeBtn" onclick="actToggle()" style="padding:10px 18px;font-size:14.5px">🏆 小组活动座位</button>
       <span class="savetag" id="actModeTip" style="display:none"></span>
     </div>
     <div data-page-node-id="6QkmzGTLvW7anGtAJsxIYR" class="weeknav" id="weekNav">
       <button data-page-node-id="BR3kmwQm3QEXZxVVIh0Yxb" class="wkbtn" id="wkPrev" onclick="navWeek(-1)" title="看上一周（Alt+←）"><!--pnid:B9JZPwsEAYEM5T6JozSzGR-->◀</button>
-      <span data-page-node-id="YuTNQH36yTEh3czOhtxoz7" class="wklab" id="wkLab"><!--pnid:11z8da85v45S86o8VZFJA8-->第 7 周</span>
+      <span data-page-node-id="YuTNQH36yTEh3czOhtxoz7" class="wklab" id="wkLab"><!--pnid:11z8da85v45S86o8VZFJA8-->第 9 周</span>
       <button data-page-node-id="aWxOYDntgnoybxrm1vz410" class="wkbtn" id="wkNext" onclick="navWeek(1)" title="看下一周（Alt+→）"><!--pnid:7Rg5miHsHdNXc4FTUJn2k8-->▶</button>
       <button data-page-node-id="FkSWLB2EhIbfxYoWsSRPzW" class="btn2 sm" id="wkJump" onclick="backToNow()" title="回到已确认的当前周"><!--pnid:dYsqMTEIS7jKZNaVKUMS0h-->⏱ 当前周</button>
       <span data-page-node-id="X2ZdbvaOt0gizWK7z8BthZ" class="wkctl">
@@ -1884,6 +1884,7 @@ table.paper td.l{text-align:left;font-weight:600}
         <button class="btn2" onclick="cloudBakRestore()" title="从浏览器内保留的最近 5 份备份里挑一份恢复">↩︎ 从本地备份恢复</button>
         <span style="font-size:12px;color:#76867e">2.6.56 起：座位表 / 通讯录 / 教研库 / 专著库 已并入云端同步，不再只存本机</span>
         <div style="font-size:12px;color:#76867e;margin-top:4px">2.6.57 起：首页新增「📌 桌面标签」—— 弹出独立小窗，主窗口最小化它也留在桌面上，显示日期周次 / 值班备忘 / 当前与下节课 / 未交作业名单（右上角 ⚙ 可勾选要显示哪些板块）</div>
+        <div style="font-size:12px;color:#76867e;margin-top:4px">2.6.58 修正：周次一律按真实日历推算（学期起点 2026-08-31），不再被座位表周次带偏；点首页「第 N 周」胶囊可手动锁定，留空即恢复自动</div>
       </div>
       <div class="syncdesc" style="margin-top:6px">旧通道（微信云开发）：<input id="mpSyncUrl" placeholder="云接入地址（选「微信云开发」时使用）" style="width:60%;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px;vertical-align:middle">
         <input id="mpSyncToken" placeholder="同步钥匙" style="width:140px;height:30px;border:1px solid #d7dee8;border-radius:8px;padding:0 10px;font-size:12px;vertical-align:middle"></div>
@@ -3103,7 +3104,12 @@ function rotateOnce(cur,monthTurn){
    两套数据各自独立：
      DATA.seats   当前周（已确认）的真实座次，编辑/轮转都改它
      runSeats     从当前周往后推演出来的逐周座次（只读预览），改它不影响当前周 */
-var NOW_WEEK=(function(){try{var v=parseInt(localStorage.getItem('wb_now_week'),10);if(v>=1&&v<=60)return v}catch(e){}})()||9,viewWeek=NOW_WEEK,viewList=null;   /* 2.6.55 默认第 9 周；可在首页周胶囊上点击改，存 localStorage */
+/* 学期起点提前声明：周次推算依赖它，必须在本行之前就可用 */
+var SEMESTER_START='2026-08-31';
+/* 2.6.57 修正：周次一律以真实日历（SEMESTER_START）推算为准。
+   旧 bug 是 loadWeek() 读 seat_week（座位表周次，默认 7）把真实周次拖成第 7 周，
+   导致首页/桌面标签显示 7 而实际已到第 9 周。手动设定需显式写 wb_week_manual=1 才生效。 */
+var NOW_WEEK=resolveNowWeek(),viewWeek=NOW_WEEK,viewList=null;
 var runSeats=null,runEnd=0;           // 推演结果：runSeats[1..n] 对应 NOW_WEEK+1 .. NOW_WEEK+n
 var previewSeats=null,previewKind=null,previewWeek=0,previewFrom=null;
 var editMode=false,pickedKey=null,dragFromKey=null;
@@ -3112,11 +3118,23 @@ var WK_MIN=1,WK_MAX=40;               // 最多往后推开 40 周
 /* 学期起点：第 1 周的周一。改这里即可整体校准周次。
    推算依据：今天 2026-10-26(周一)=第 9 周 → 第 1 周周一 = 10-26 往前 8 周 = 2026-08-31（周一）。
    周次 = floor((本周周一 − 学期起点周一) / 7) + 1，永远以真实日历为准，不再依赖会漂移的计数器。 */
-var SEMESTER_START='2026-08-31';
+/* NOTE: SEMESTER_START 已在上方（NOW_WEEK 声明之前）提前定义，此处不再重复 */
 function schoolWeekOf(d){
   const a=mondayOf(new Date(SEMESTER_START+'T00:00:00'));
   const b=mondayOf(d);
   return Math.round((b-a)/(7*864e5))+1;
+}
+/* 解析"当前第几周"：手动设定（wb_week_manual=1）优先，否则按真实日历推算 */
+function resolveNowWeek(){
+  try{
+    if(localStorage.getItem('wb_week_manual')==='1'){
+      var v=parseInt(localStorage.getItem('wb_now_week'),10);
+      if(v>=1&&v<=60)return v;
+    }
+  }catch(e){}
+  var w=9;
+  try{w=schoolWeekOf(new Date())}catch(e){}
+  return (w>=1&&w<=60)?w:9;
 }
 
 function loadWeek(){const v=parseInt(localStorage.getItem('seat_week')||'7',10);return isNaN(v)||v<1?v||7:v}
@@ -3468,7 +3486,7 @@ function rotApply(){
     syncSeats();
   }else{
     /* 月度对调：原地调整，周次不变，推演缓存作废 */
-    NOW_WEEK=NOW_WEEK||loadWeek();
+    NOW_WEEK=NOW_WEEK||resolveNowWeek();
     previewSeats=null;previewKind=null;previewFrom=null;
     viewWeek=NOW_WEEK;viewList=DATA.seats;
     runSeats=null;runEnd=NOW_WEEK;
@@ -3481,7 +3499,7 @@ function rotApply(){
 }
 
 /* 启动：按存下的周次渲染一次，并挂上快捷键 */
-NOW_WEEK=loadWeek();runEnd=NOW_WEEK;
+NOW_WEEK=resolveNowWeek();runEnd=NOW_WEEK;
 viewWeek=NOW_WEEK;
 viewList=DATA.seats;
 renderSeats();
@@ -13253,12 +13271,18 @@ function renderHome(){
   cwk.appendChild(document.createTextNode(' 周'));
   cwk.title='点击修改「当前第几周」';
   cwk.style.cursor='pointer';
-  cwk.onclick=function(){          /* 2.6.55 点周胶囊即可改周次，存 localStorage，以后不用改源码 */
-    var v=prompt('设置「当前是第几周」？（1-60）\n修改后页面会重新加载。',String(NOW_WEEK));
+  cwk.onclick=function(){          /* 2.6.57 点周胶囊改周次：留空=恢复自动（按日历推算）；填数字=手动锁定 */
+    var auto=NOW_WEEK;try{auto=schoolWeekOf(new Date())}catch(e){}
+    var v=prompt('设置「当前是第几周」？\n\n· 留空并确定 = 恢复自动（按日历推算，今天是第 '+auto+' 周，推荐）\n· 或输入 1-60 手动锁定\n\n修改后页面会重新加载。',String(NOW_WEEK));
     if(v==null)return;
+    v=String(v).trim();
+    if(v===''){
+      try{localStorage.removeItem('wb_week_manual');localStorage.removeItem('wb_now_week')}catch(e){}
+      location.reload();return;
+    }
     var n=parseInt(v,10);
-    if(!(n>=1&&n<=60)){alert('请输入 1 到 60 之间的数字');return}
-    try{localStorage.setItem('wb_now_week',String(n))}catch(e){}
+    if(!(n>=1&&n<=60)){alert('请输入 1 到 60 之间的数字，或留空恢复自动');return}
+    try{localStorage.setItem('wb_now_week',String(n));localStorage.setItem('wb_week_manual','1')}catch(e){}
     location.reload();
   };
   chips.appendChild(cwk);
