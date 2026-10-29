@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>座位恢复工具 · 教师工作台</title>
+<style>
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#eef6f1;color:#22303f;max-width:760px;margin:0 auto;padding:24px;line-height:1.7}
+h1{font-size:20px;color:#1a6b45}
+.card{background:#fff;border:1px solid #d8e6dd;border-radius:12px;padding:16px 18px;margin:14px 0}
+button{padding:10px 20px;border:0;border-radius:9px;background:#1a9c5b;color:#fff;font-size:15px;cursor:pointer}
+#out{white-space:pre-wrap;font:12.5px/1.6 Menlo,Consolas,monospace;background:#f4f8f5;border-radius:9px;padding:12px;margin-top:12px;max-height:320px;overflow:auto}
+.warn{color:#a05a12;background:#fdf6e3;border:1px solid #f3e6c4;border-radius:9px;padding:10px 12px;font-size:13px}
+</style></head><body>
+<h1>🪑 座位恢复工具（照片还原版 · 第9周 · 51人）</h1>
+<div class="card">
+<b>用途</b>：座位表意外变空时，把「2026-10-29 照片还原版」座位一键写回本机浏览器。<br>
+<b>步骤</b>：① 点下方按钮 → ② 看到「恢复成功」后 → ③ 打开/刷新工作台页面，座位即回来。
+</div>
+<div class="card"><b>当前状态诊断</b><div id="diag">读取中…</div></div>
+<button onclick="doRestore()">🪑 一键恢复座位（第9周 · 8组 · 3位固定同学）</button>
+<div id="out"></div>
+<div class="warn" style="margin-top:16px">⚠️ 恢复后请关闭其他设备/浏览器上还开着的工作台旧标签页（尤其是学校电脑上长期开着的）——旧版页面每 10 分钟会把空数据写回云端，这是座位反复丢失的根源。</div>
+<script>
+var DATA = {"gturn": 0, "mturn": 0, "order": {}, "members": {"1": ["陈峻德", "陈思睿", "邓睿瑾", "蒋子霆", "黄紫琦", "刘睿萱"], "2": ["廖海雯", "郑竣玮", "林可欣", "黄铎鸿", "王铎玮", "陈发霖"], "3": ["张芷铭", "吴熙然", "胡婉芸", "倪车晓宇", "巫钦文", "刘霖霖"], "4": ["郑思彤", "黄梓轩", "杨佑之", "汤静琪", "蔡卓铖", "陈嬿如"], "5": ["王程纬", "廖峻乐", "阴宇航", "刘熙瞳", "陈孜铧", "朱妍菲"], "6": ["管萱萱", "谢思羽", "卓雨菲", "刘润", "吴泽锴", "吕沛岑"], "7": ["谢瑾汐", "严一马", "沈妙珂", "邓睿瑜", "周子源", "牛子悦"], "8": ["陈安然", "林南臻", "甄俊泓", "曾琬茵", "徐曼桦", "黄思茹"]}, "roles": {"1": ["成员", "成员", "组长", "成员", "成员", "副组长"], "2": ["成员", "成员", "组长", "成员", "成员", "副组长"], "3": ["成员", "成员", "组长", "成员", "成员", "副组长"], "4": ["成员", "成员", "组长", "成员", "成员", "副组长"], "5": ["成员", "成员", "组长", "成员", "成员", "副组长"], "6": ["成员", "成员", "组长", "成员", "成员", "副组长"], "7": ["成员", "成员", "组长", "成员", "成员", "副组长"], "8": ["成员", "成员", "组长", "成员", "成员", "副组长"]}, "layers": {}, "seq": {"1": {"leader": "邓睿瑾", "dep": "刘睿萱", "m1": "陈峻德", "m2": "陈思睿", "m3": "蒋子霆", "m4": "黄紫琦"}, "2": {"leader": "林可欣", "dep": "陈发霖", "m1": "廖海雯", "m2": "郑竣玮", "m3": "黄铎鸿", "m4": "王铎玮"}, "3": {"leader": "胡婉芸", "dep": "刘霖霖", "m1": "张芷铭", "m2": "吴熙然", "m3": "倪车晓宇", "m4": "巫钦文"}, "4": {"leader": "杨佑之", "dep": "陈嬿如", "m1": "郑思彤", "m2": "黄梓轩", "m3": "汤静琪", "m4": "蔡卓铖"}, "5": {"leader": "阴宇航", "dep": "朱妍菲", "m1": "王程纬", "m2": "廖峻乐", "m3": "刘熙瞳", "m4": "陈孜铧"}, "6": {"leader": "卓雨菲", "dep": "吕沛岑", "m1": "管萱萱", "m2": "谢思羽", "m3": "刘润", "m4": "吴泽锴"}, "7": {"leader": "沈妙珂", "dep": "牛子悦", "m1": "谢瑾汐", "m2": "严一马", "m3": "邓睿瑜", "m4": "周子源"}, "8": {"leader": "甄俊泓", "dep": "黄思茹", "m1": "陈安然", "m2": "林南臻", "m3": "曾琬茵", "m4": "徐曼桦"}}, "pr": {"陈峻德": "成员", "陈思睿": "成员", "邓睿瑾": "组长", "蒋子霆": "成员", "黄紫琦": "成员", "刘睿萱": "副组长", "廖海雯": "成员", "郑竣玮": "成员", "林可欣": "组长", "黄铎鸿": "成员", "王铎玮": "成员", "陈发霖": "副组长", "张芷铭": "成员", "吴熙然": "成员", "胡婉芸": "组长", "倪车晓宇": "成员", "巫钦文": "成员", "刘霖霖": "副组长", "郑思彤": "成员", "黄梓轩": "成员", "杨佑之": "组长", "汤静琪": "成员", "蔡卓铖": "成员", "陈嬿如": "副组长", "王程纬": "成员", "廖峻乐": "成员", "阴宇航": "组长", "刘熙瞳": "成员", "陈孜铧": "成员", "朱妍菲": "副组长", "管萱萱": "成员", "谢思羽": "成员", "卓雨菲": "组长", "刘润": "成员", "吴泽锴": "成员", "吕沛岑": "副组长", "谢瑾汐": "成员", "严一马": "成员", "沈妙珂": "组长", "邓睿瑜": "成员", "周子源": "成员", "牛子悦": "副组长", "陈安然": "成员", "林南臻": "成员", "甄俊泓": "组长", "曾琬茵": "成员", "徐曼桦": "成员", "黄思茹": "副组长"}, "gridVer": 0, "actNo": 1, "flip": false, "leadSwap": false, "freeSeat": false, "fixedMap": {"方浩轩": {"s": 7, "g": 2}, "陈钰康": {"s": 7, "g": 6}, "柯骏豪": {"s": 7, "g": 8}}};
+function st(k){ try{var v=localStorage.getItem(k); if(!v)return k+': (空)'; var o=JSON.parse(v); var n=(o&&o.members)?Object.keys(o.members).length+ '组':(Array.isArray(o)?o.length+'条':'有值'); return k+': '+n }catch(e){ return k+': (坏数据)' } }
+document.getElementById('diag').innerHTML =
+ '<div>'+st('seat_act_v1')+'</div><div>'+st('seat_order_v1')+'</div><div>'+st('seat_data_v1')+'</div>'+
+ '<div>同步配置: '+ (function(){try{var s=JSON.parse(localStorage.getItem('wb_gitee_v1')||localStorage.getItem('gitee_cfg_v1')||'{}');return (s.owner||'?')+'/'+(s.repo||'?')+' token尾:'+(s.token?s.token.slice(-4):'无')}catch(e){return '未找到'}})() +'</div>';
+function log(s){var o=document.getElementById('out');o.textContent+=s+'\n'}
+function doRestore(){
+  try{
+    localStorage.setItem('seat_act_v1', DATA);
+    localStorage.setItem('seat_order_v1', DATA);
+    log('✅ 座位已写入本机（seat_act_v1 + seat_order_v1）');
+    log('   8 组 × 6 人 + 固定3人（方浩轩→2组 / 陈钰康→6组 / 柯骏豪→8组 坐第7位）');
+    log('   组长/副组长角色已按人绑定（语文组长=组长，数英组长=副组长）');
+    log('👉 现在打开或刷新工作台页面即可看到座位表');
+  }catch(e){ log('❌ 失败: '+e.message) }
+}
+</script></body></html>
