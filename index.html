@@ -11463,8 +11463,10 @@ function stuRoster(){
     var n=fval(r,'姓名'),g=fval(r,'组别'),d=fval(r,'职务');
     if(!n)return;
     if(!gi[n])gi[n]={};
-    if(g)gi[n].组别=g;
-    if(d)gi[n].职务=d;
+    /* 2.6.60 数据表里组别/职务可能是数值型（如 1），不过 String() 会让
+       groupList 里 (s.组别||'').trim() 直接抛错 → 座位表整页渲染不出来 */
+    if(g)gi[n].组别=String(g);
+    if(d)gi[n].职务=String(d);
   });
   out.forEach(function(x){
     var g=gi[x.姓名];
@@ -11479,7 +11481,7 @@ function stuRoster(){
 function groupList(){
   var map={},out=[];
   stuRoster().forEach(function(s){
-    var g=(s.组别||'').trim();
+    var g=String(s.组别==null?'':s.组别).trim();   /* 2.6.60 防数值型组别 */
     if(!g)return;
     if(!map[g]){map[g]={no:g,members:[]};out.push(map[g])}
     map[g].members.push(s.姓名);
@@ -12340,7 +12342,7 @@ function gpRedo(){
 function renderFree(){
   var host=document.getElementById('gpFree');
   if(!host)return;
-  var free=stuRoster().filter(function(s){return !(s.组别||'').trim()});
+  var free=stuRoster().filter(function(s){return !String(s.组别==null?'':s.组别).trim()});
   fill(host);
   if(!free.length){
     if(GP_EDIT){
