@@ -898,7 +898,7 @@ table.sct td .del:hover{color:#c2410c}
 .hwlv button.on.g{background:#1a9c5b}
 .hwlv button.on.y{background:#d9a305}
 .hwlv button.on.r{background:#dc2626}
-.hwlv button.on.z{background:#f0a30a}
+.hwlv button.on.z{background:#2f6fd0}
 table.hw{border-collapse:separate;border-spacing:0;font-size:13px;width:100%}
 table.hw th,table.hw td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;text-align:center}
 table.hw th{background:#eaf5ef;font-weight:600;padding:8px 6px;position:sticky;top:0;z-index:3;white-space:nowrap;min-width:74px}
@@ -909,19 +909,21 @@ table.hw td.spacer,table.hw th.spacer{border-right:0;border-bottom:1px solid var
 table.hw td.nm{position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:0 10px;white-space:nowrap;width:112px;min-width:112px;max-width:112px;overflow:hidden;text-overflow:ellipsis}
 table.hw tbody tr:nth-child(even) td.nm{background:#fafcfb}
 table.hw td.cell{height:38px;cursor:pointer;position:relative;background:#fff}
-table.hw td.cell:not(.g):not(.y):not(.r):after{content:"";position:absolute;inset:7px;border:1px dashed #d5e5dd;border-radius:5px}
+table.hw td.cell:not(.g):not(.y):not(.r):not(.z):after{content:"";position:absolute;inset:7px;border:1px dashed #d5e5dd;border-radius:5px}
 table.hw td.cell:hover{box-shadow:inset 0 0 0 1px #a9d9bf}
 table.hw td.cell .mk{font-size:15px;font-weight:800;line-height:1;display:block;color:#fff}
 table.hw td.cell.g{background:#1a9c5b}
 table.hw td.cell.y{background:#f0b429}
-table.hw td.cell.z{background:#f0a30a}
+/* 2.6.59 「中」改为浅蓝底 + 深蓝字（用户指定；与优绿/良黄/差红区分） */
+table.hw td.cell.z{background:#cfe6fb}
+table.hw td.cell.z .mk{color:#1d5fbf}
 table.hw td.cell.r{background:#dc2626}
 table.hw td.cell.busy{opacity:.5;cursor:progress}
 table.hw td.sum{background:#f7fbf9;font-weight:700;color:var(--primary);width:56px}
 /* 浏览模式：作业格子只读，不响应点击，避免翻名单时误涂 */
 table.hw.viewonly td.cell{cursor:default}
 table.hw.viewonly td.cell:hover{box-shadow:none}
-table.hw.viewonly td.cell:not(.g):not(.y):not(.r):after{border-color:#eef4f1}
+table.hw.viewonly td.cell:not(.g):not(.y):not(.r):not(.z):after{border-color:#eef4f1}
 /* 浏览模式时等级按钮置灰，提示先开始登记 */
 .hwlv.dim{opacity:.45;pointer-events:none}
 .hwstat{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:12.5px}
@@ -6727,7 +6729,20 @@ function loadSeatsFromDB(){
     var nameCount={};rows.forEach(function(r){if(r['姓名'])nameCount[r['姓名']]=(nameCount[r['姓名']]||0)+1});
     var dupNames=Object.keys(nameCount).filter(function(n){return nameCount[n]>1}).length;
     if(dupNames){try{console.warn('[database] 座位表有 '+dupNames+' 人存在多行记录，建议夜间巡检清理')}catch(e){}}
-    if(!list.length){
+    /* 2.6.59 护栏：统计云端「有效座次」（座位编号形如 组-排）。
+       若云端为空或有效数 <40（被清空 / 脏数据 / 解析失败），而本机 DATA.seats 仍保留着
+       上次编辑后的完整座次（≥40 条且座位编号齐全），则**沿用本机数据并自愈写回云端**，
+       绝不用空结果覆盖成空白——这正是“保存过却打开空白”的根因。 */
+    var __valid=list.filter(function(x){return x&&x.座位编号&&/^\d+-\d+$/.test(x.座位编号)}).length;
+    var __lv=(DATA.seats||[]).filter(function(x){return x&&x.座位编号&&/^\d+-\d+$/.test(x.座位编号)}).length;
+    if(!list.length || __valid<40){
+      if(__lv>=40){
+        toastMsg('☁️ 云端座次缺失/异常，已用本机最近一次座次恢复');
+        try{clsSyncFromData()}catch(e){}
+        healFixed();renderSeats();setWeekLabel();
+        try{syncSeats()}catch(e){console.error(e)}
+        return;
+      }
       if(!DATA.seats.length){document.getElementById('seatBox').textContent='';return}
       SEAT_INITING=true;
       toastMsg('☁️ 正在初始化座位数据表…');
