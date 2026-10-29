@@ -1197,7 +1197,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">版本 v127 · 10-29 · 2.6.61</div>
+  <div class="verline" id="appVer">版本 v128 · 10-29 · 2.6.62</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -11607,8 +11607,9 @@ function hwBuildItems(){
     if(seen[k])return;
     seen[k]=1;out.push({name:it,date:d});
   });
-  out.sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(b.name).localeCompare(String(a.name))});
-  HW_ITEMS=out.slice(0,12);
+  /* 2.6.62 列序改为从左往右：左边是最早的作业，新增作业追加在最右侧（积分列前） */
+  out.sort(function(a,b){return String(a.date).localeCompare(String(b.date))||String(a.name).localeCompare(String(b.name))});
+  HW_ITEMS=out.slice(-12);
 }
 function hwAddItem(){
   var name=(document.getElementById('hwName').value||'').trim();
@@ -11616,7 +11617,7 @@ function hwAddItem(){
   var date=hwDateOnly(document.getElementById('hwDate').value)||ymd(new Date());
   var dup=HW_ITEMS.some(function(x){return x.name===name&&x.date===date});
   if(dup){toastMsg('这次作业已经建过了');return}
-  HW_ITEMS.unshift({name:name,date:date,pending:true});
+  HW_ITEMS.push({name:name,date:date,pending:true});
   document.getElementById('hwName').value='';
   renderHW();
   setTimeout(function(){try{renderHome()}catch(e){}},0);
@@ -11726,7 +11727,7 @@ function hwBuildItemsOnRender(){
   var manual=HW_ITEMS.filter(function(x){return x.pending});
   hwBuildItems();
   manual.forEach(function(x){
-    if(!HW_ITEMS.some(function(y){return y.name===x.name&&y.date===x.date}))HW_ITEMS.unshift(x);
+    if(!HW_ITEMS.some(function(y){return y.name===x.name&&y.date===x.date}))HW_ITEMS.push(x);
   });
 }
 function hwRenderStat(stu,m){
@@ -11793,7 +11794,11 @@ function scnPaintItems(){
   HW_ITEMS.filter(function(x){return x.pending}).forEach(function(it){add(it,true)});
   HW_ITEMS.filter(function(x){return !x.pending}).forEach(function(it){add(it,false)});
   if(keep&&seen[keep])sel.value=keep;
-  if(!sel.value&&sel.options.length)sel.selectedIndex=0;
+  if(!sel.value&&sel.options.length){
+    /* 2.6.62 列序改右增後，默认目标选最新：有待保存的新列优先，否则最右一列 */
+    var pi=-1;[].forEach.call(sel.options,function(o,i){if(pi<0&&o.textContent.indexOf('刚建的列')>=0)pi=i});
+    sel.selectedIndex=pi>=0?pi:sel.options.length-1;
+  }
 }
 /* 把「拍照登记」的目标作业切到指定那一列 */
 function scnSelectItem(name,date){
@@ -15181,8 +15186,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v127';
-var WB_BUILD_DATE = '10-29', WB_BUILD_NO = '2.6.61';
+var WB_MY_VER = 'v128';
+var WB_BUILD_DATE = '10-29', WB_BUILD_NO = '2.6.62';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
