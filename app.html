@@ -1197,7 +1197,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">版本 v129 · 10-29 · 2.6.63</div>
+  <div class="verline" id="appVer">版本 v132 · 10-30 · 2.6.65</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -14909,6 +14909,42 @@ function mergePaintPreview() {
   box.appendChild(wrap);
 }
 
+/* v132：清理历史遗留的整库备份（旧版每次导入/同步都往 localStorage 塞一份全库副本，
+   却从不删除；多次之后 5MB 直接被备份吃满，再导入就报"存储空间不足"）。 */
+function wbPurgeOldBackups(keep) {
+  keep = keep || 0;
+  var keys = [];
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('wb_local_db_v1.bak') === 0) keys.push(k);
+    }
+  } catch (e) { return 0 }
+  keys.sort();                       /* 带时间戳，末尾最新 */
+  if (keep > 0) keys = keys.length > keep ? keys.slice(0, keys.length - keep) : [];
+  var n = 0;
+  keys.forEach(function (k) { try { localStorage.removeItem(k); n++ } catch (e) {} });
+  return n;
+}
+/* v132：安全写库——直接写；写不进就先清备份腾空间再写；仍失败返回 false（交给上层提示）。 */
+function wbSafeSetDB(json) {
+  try { localStorage.setItem('wb_local_db_v1', json); return true } catch (e) {}
+  try { wbPurgeOldBackups(0) } catch (e) {}
+  try { localStorage.setItem('wb_local_db_v1', json); return true } catch (e) {}
+  /* 还不行：把云端历史快照备份 wb_bak_* 也只留最新 1 份再试 */
+  try {
+    var bk = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('wb_bak_') === 0) bk.push(k);
+    }
+    bk.sort();
+    if (bk.length > 1) bk.slice(0, bk.length - 1).forEach(function (k) { try { localStorage.removeItem(k) } catch (e) {} });
+  } catch (e) {}
+  try { localStorage.setItem('wb_local_db_v1', json); return true } catch (e) {}
+  return false;
+}
+
 /* 真正写入：按表合并，不删除本机任何数据 */
 function mergeCommit() {
   var d = MERGE_PENDING;
@@ -14953,16 +14989,11 @@ function mergeCommit() {
     } catch (e) {}
   }
 
-  /* 写库前先备份一份，导错了能回退 */
-  try {
-    localStorage.setItem('wb_local_db_v1.bak_merge_' + Date.now(),
-      JSON.stringify(mergeReadLocal()));
-  } catch (e) {}
-
-  try {
-    localStorage.setItem('wb_local_db_v1', JSON.stringify(local));
-  } catch (e) {
-    toastMsg('⚠️ 写入失败：浏览器存储空间可能不足');
+  /* v132：不再写整库备份（合并只增不删，备份纯冗余，却让占用瞬间 ×3 并永久堆积）。
+     先清历史备份腾空间，再安全写库。 */
+  try { wbPurgeOldBackups(0) } catch (e) {}
+  if (!wbSafeSetDB(JSON.stringify(local))) {
+    toastMsg('⚠️ 本机存储已满：数据量超过浏览器上限（约5MB）。请先点「导出备份」存到电脑，清理浏览器本站数据后再导入；或改用桌面版。');
     return;
   }
 
@@ -15172,8 +15203,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v131';
-var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.64';
+var WB_MY_VER = 'v132';
+var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.65';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -15585,8 +15616,8 @@ function giteeMergeIntoLocal(mpTables) {
   });
   if (!totalNew) return 0;
   plan.forEach(function (p) { local[p.id] = (Array.isArray(local[p.id]) ? local[p.id] : []).concat(p.rows); });
-  try { localStorage.setItem('wb_local_db_v1.bak_merge_' + Date.now(), JSON.stringify(mergeReadLocal())) } catch (e) {}
-  localStorage.setItem('wb_local_db_v1', JSON.stringify(local));
+  try { wbPurgeOldBackups(0) } catch (e) {}
+  try { wbSafeSetDB(JSON.stringify(local)) } catch (e) { localStorage.setItem('wb_local_db_v1', JSON.stringify(local)); }
   return Promise.resolve(totalNew);
   try { wbScheduleSave() } catch (e) {}
   return totalNew;
@@ -27784,6 +27815,25 @@ function cwInit(){
   window.addEventListener('storage',function(e){
     if(e.key==='wb_local_db_v1'){try{loadAffairFromDB()}catch(err){}}
   });
+})();
+</script>
+<script>
+/* v132 启动自愈：清掉历史遗留的整库备份，只保留最新 1 份（旧版每次导入都留一份、从不清理）。 */
+(function(){
+  function purge(){
+    try{ if(typeof wbPurgeOldBackups==='function'){ wbPurgeOldBackups(1); return; } }catch(e){}
+    try{
+      var keys=[];
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i);
+        if(k&&k.indexOf('wb_local_db_v1.bak')===0)keys.push(k);
+      }
+      keys.sort();
+      if(keys.length>1){ keys.slice(0,keys.length-1).forEach(function(k){try{localStorage.removeItem(k)}catch(e){}}); }
+    }catch(e){}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(purge,0)});
+  else setTimeout(purge,0);
 })();
 </script>
 </body>
