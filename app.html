@@ -6717,7 +6717,7 @@ function seatsFromRows(rows){
     var g=String(r['分组']||'').split('').filter(function(x){return x>='0'&&x<='9'}).join('');
     return {组号:parseInt(g,10)||0,
             组内序号:parseInt(r['组内序号'],10)||0,
-            姓名:r['姓名']||'',角色:r['角色']||'组员',
+            姓名:r['姓名']||'',角色:(r['角色']&&typeof r['角色']==='object'?(r['角色'].select||'组员'):(r['角色']||'组员')),
             学号:String(r['学号']==null?'':r['学号']),
             座位编号:r['座位编号']||'',生效周次:r['生效周次']||'',
             _gok:!!g};
@@ -6754,27 +6754,8 @@ function loadSeatsFromDB(){
        版本一致后不再干预（之后的手动调整绝不被覆盖）。 */
     try{
       var SBV='20261029b';
-      if(localStorage.getItem('seat_build_ver')!==SBV && (DATA.seats||[]).length>=40){
+      if(localStorage.getItem('seat_build_ver')!==SBV){
         try{localStorage.setItem('seat_build_ver',SBV)}catch(e){}
-        toastMsg('🪑 已应用 10-29 最新座位方案（按最后一次调整还原）');try{var __seed=JSON.parse(window.WB_SEED_SEATS||'null');if(__seed&&__seed.length>=40)DATA.seats=__seed}catch(e){}
-        /* ① 组内排位记忆按照片重排（组长/副组长位置由系统自动归位） */
-        try{DATA.seats.forEach(function(s){if(!ACT_FIXED_NAMES[s.姓名])ACT.order[s.姓名]=s.组内序号})}catch(e){}
-        /* ② 学生档案「组别」同步（分组页/小组活动视图随之更新） */
-        try{
-          var __gp={};DATA.seats.forEach(function(s){if(!ACT_FIXED_NAMES[s.姓名])__gp[s.姓名]=s.组号});
-          var __p=Promise.resolve(),__n=0;
-          Object.keys(__gp).forEach(function(nm){__p=__p.then(function(){return gpWriteGroup(nm,__gp[nm])}).then(function(){if(++__n%12===0)toastMsg('🪑 分组同步中 '+__n+'/48…')})});
-          __p.then(function(){return loadST()}).then(function(){
-            try{actResync()}catch(e){}
-            try{renderGroup()}catch(e){}
-            try{renderSeats()}catch(e){}
-          }).catch(function(e){console.warn('[seat] 档案组别同步失败',e)});
-        }catch(eGP){}
-        /* ③ 座位表立即生效并写回本机+数据表 */
-        try{clsSyncFromData()}catch(e){}
-        healFixed();renderSeats();setWeekLabel();
-        try{syncSeats()}catch(e){}
-        return;
       }
     }catch(eSB){}
     /* 2.6.59 护栏：统计云端「有效座次」（座位编号形如 组-排）。
@@ -15186,7 +15167,7 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v129';
+var WB_MY_VER = 'v130';
 var WB_BUILD_DATE = '10-29', WB_BUILD_NO = '2.6.63';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
