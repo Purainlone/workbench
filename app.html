@@ -15016,6 +15016,11 @@ function dvBool(p, k) {
   if (v && typeof v === 'object') return v.checkbox != null ? !!v.checkbox : (v.text === 'true' || v.text === true);
   return v === true || v === 'true' || v === 1 || v === '1';
 }
+/* 2.6.64 内置默认 Gitee 账户：用户已授权，任何设备打开网页版即自动接入云端同步，
+   无需每台设备手动填写。已在本机手动配置过的设备以 localStorage 为准（g 优先取本地）。
+   安全提示：此 token 会出现在公开页面源码中，仅用于个人私有同步仓库；
+   如需更高安全，可在「数据同步」设置里改成你自己的 Gitee 私人令牌。 */
+var WB_GITEE_DEFAULTS = { owner: 'the-solitary-purain', repo: 'work', token: 'dd5bf6ed8681100d94c4d0157979d8bf' };
 function mpSyncSettings() {
   function g(k, d) { try { return (localStorage.getItem(k) || '').trim() || d } catch (e) { return d } }
   return {
@@ -15023,10 +15028,10 @@ function mpSyncSettings() {
     classId: g('wb_sync_class', 'c1'),
     token: g('wb_sync_token', 'LGS-SYNC-2026'),
     mode: g('wb_sync_mode', 'gitee'),
-    gOwner: g('wb_g_owner', ''),
-    gRepo: g('wb_g_repo', ''),
+    gOwner: g('wb_g_owner', WB_GITEE_DEFAULTS.owner),
+    gRepo: g('wb_g_repo', WB_GITEE_DEFAULTS.repo),
     gPath: g('wb_g_path', 'wb_sync_'),
-    gToken: g('wb_g_token', ''),
+    gToken: g('wb_g_token', WB_GITEE_DEFAULTS.token),
     gAuto: g('wb_g_auto', '1') !== '0'
   };
 }
@@ -15167,8 +15172,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v130';
-var WB_BUILD_DATE = '10-29', WB_BUILD_NO = '2.6.63';
+var WB_MY_VER = 'v131';
+var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.64';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -15956,10 +15961,16 @@ var GITEE_DEBOUNCE = null;
 function syncScheduleSoon() {
   if (!mpSyncSettings().gAuto) return;
   if (GITEE_DEBOUNCE) clearTimeout(GITEE_DEBOUNCE);
-  GITEE_DEBOUNCE = setTimeout(function () { GITEE_DEBOUNCE = null; syncCycle() }, 60 * 1000);
+  /* 2.6.64 写入后 8 秒即备份（原为 60 秒，关页面常被打断导致漏同步） */
+  GITEE_DEBOUNCE = setTimeout(function () { GITEE_DEBOUNCE = null; syncCycle() }, 8 * 1000);
 }
-setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle() }, 30 * 1000);
+/* 2.6.64 启动 3 秒后即从云端恢复（打开即同步），不再等 30 秒 */
+setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle(true) }, 3 * 1000);
 setInterval(function () { if (mpSyncSettings().gAuto) syncCycle() }, 10 * 60 * 1000);
+/* 2.6.64 页面切到后台/关闭前强制同步一次，防「登记完立刻关页面」漏掉云端备份 */
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'hidden') { try { if (mpSyncSettings().gAuto) syncCycle() } catch (e) {} }
+});
 
 /* 2.6.3 别端有新数据立即同步：
    10 分钟一轮太慢 —— 在小程序里记完一条，电脑上要等最多 10 分钟才看见，
