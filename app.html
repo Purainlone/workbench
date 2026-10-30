@@ -1197,7 +1197,7 @@ table.paper td.l{text-align:left;font-weight:600}
 <body data-page-node-id="VWm2YCKhwxOUBWSlexIaam">
 <aside data-page-node-id="uyTdXvcdMMBT8HJ1ZWRO9X">
   <div data-page-node-id="YkELpTUKfJkpu7qzDPa66K" class="logo"><!--pnid:7ytoUsgxIUXQsQNXnaE57T-->教师工作台</div>
-  <div class="verline" id="appVer">版本 v132 · 10-30 · 2.6.65</div>
+  <div class="verline" id="appVer">版本 v133 · 10-30 · 2.6.66</div>
   <nav data-page-node-id="ljZdrlGNjxdpectAoWjkyv" id="nav">
     <button data-page-node-id="XEQbK8vmBbzCXq08mbMIpS" class="active" data-s="home">🏠 <span class="lbl">今日首页</span></button>
 
@@ -13976,8 +13976,11 @@ function dtSyncBtn(){
   b.textContent=on?'📌 收起桌面标签':'📌 桌面标签';
   b.title=on?'收起（也可以直接在小窗上点 ×）':'弹出一个独立小窗：日期周次 / 值班备忘 / 课程 / 未交作业，主窗口最小化它也还在';
 }
-/* 主窗口关掉时顺便收起小窗，避免留下空壳 */
-window.addEventListener('beforeunload',function(){try{dtClose()}catch(e){}});
+/* v133 修复：不再在 beforeunload 里关掉桌面标签小窗！
+   以前主窗口每次「同步后自动刷新」都会先触发 beforeunload → 小窗被连带关闭，
+   自动刷新一多，用户看到的就是「桌面标签打开一会儿就自己关了」。
+   现在小窗独立存活：主窗口刷新它不受影响；主窗口真被关掉时，
+   小窗自带的 alive() 检测会显示「主窗口已关闭，以下为最后数据」，不会留空壳。 */
 /* 上次开着的话，这次进页面自动弹出来（被浏览器拦截就静默，首页按钮照样能手动开） */
 setTimeout(function(){try{dtAutoOpen()}catch(e){}},2500);
 
@@ -15203,8 +15206,8 @@ function giteeCfg() {
    发现自己不是最新版 → 弹提示并自动刷新页面，本轮绝不写回。
    （Gitee 该仓库当前无法创建新文件，所以不复用独立版本文件，
    直接挂在 wb_sync_*.json 顶层，一次 GET 两个用途、零额外请求。） */
-var WB_MY_VER = 'v132';
-var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.65';
+var WB_MY_VER = 'v133';
+var WB_BUILD_DATE = '10-30', WB_BUILD_NO = '2.6.66';
 try{wbPaintVer()}catch(_){}   /* 2.6.60 解析到此处即刷新标题栏版本号 */
 function wbVerPutInline() { return WB_MY_VER; }   /* 发布标记：写回时挂在 doc 顶层 */
 function wbPaintVer(){
@@ -15617,7 +15620,19 @@ function giteeMergeIntoLocal(mpTables) {
   if (!totalNew) return 0;
   plan.forEach(function (p) { local[p.id] = (Array.isArray(local[p.id]) ? local[p.id] : []).concat(p.rows); });
   try { wbPurgeOldBackups(0) } catch (e) {}
-  try { wbSafeSetDB(JSON.stringify(local)) } catch (e) { localStorage.setItem('wb_local_db_v1', JSON.stringify(local)); }
+  /* v133 关键修复：wbSafeSetDB 写不进时是「静默返回 false」而不是抛异常，
+     以前这里只 catch 异常、不查返回值 —— 存储满了也当「合并成功」上报，
+     于是「已并入 94 条 → 刷新 → 本机还是没存上 → 再并 94 条」无限刷新死循环。
+     现在写库失败必须上报：计入 MERGE_FAIL（本轮不回写、保住云端数据）、
+     返回 0（绝不触发「并入后自动刷新」），并给出明确的自救提示。 */
+  window.__WB_MERGE_FAIL__ = 0;
+  var _saved = false;
+  try { _saved = !!wbSafeSetDB(JSON.stringify(local)) } catch (e1) { _saved = false }
+  if (!_saved) {
+    window.__WB_MERGE_FAIL__ = totalNew;
+    try { toastMsg('⚠️ 本机存储已满：' + totalNew + ' 条没能写入本机（云端数据完好）。请先「导出备份」存到电脑，再清理浏览器本站数据') } catch (e2) {}
+    return 0;
+  }
   return Promise.resolve(totalNew);
   try { wbScheduleSave() } catch (e) {}
   return totalNew;
@@ -15652,6 +15667,17 @@ function syncLockRelease() {
 function syncLockId() {
   if (!window.__WB_LOCK_ID__) window.__WB_LOCK_ID__ = 'w' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
   return window.__WB_LOCK_ID__;
+}
+
+/* v133 自动刷新限速闸：同一页面 2 分钟内最多自动 reload 一次。
+   防止任何未预见的「并入 → 刷新 → 再并入」组合演变成无限刷新死循环。 */
+function wbAutoReloadOk() {
+  try {
+    var t = +sessionStorage.getItem('wb_auto_rl') || 0;
+    if (Date.now() - t < 2 * 60 * 1000) return false;
+    sessionStorage.setItem('wb_auto_rl', String(Date.now()));
+    return true;
+  } catch (e) { return false }
 }
 
 function syncCycle(manual) {
@@ -15877,7 +15903,8 @@ function syncCycleCore(manual) {
             toastMsg('☁️ 已并入 ' + added + ' 条，正在刷新页面…');
             setTimeout(function () { location.reload() }, 1200);
           } else if (window.__WB_LOCAL__) {
-            if (!document.hasFocus()) { setTimeout(function () { location.reload() }, 1200) }
+            /* v133：自动刷新加限速闸，杜绝任何形式的刷新死循环 */
+            if (!document.hasFocus() && wbAutoReloadOk()) { setTimeout(function () { location.reload() }, 1200) }
             else { toastMsg('☁️ 自动同步并入 ' + added + ' 条，空闲时刷新生效'); }
           } else {
             toastMsg('☁️ 从云端并入 ' + added + ' 条');
@@ -15996,7 +16023,9 @@ function syncScheduleSoon() {
   GITEE_DEBOUNCE = setTimeout(function () { GITEE_DEBOUNCE = null; syncCycle() }, 8 * 1000);
 }
 /* 2.6.64 启动 3 秒后即从云端恢复（打开即同步），不再等 30 秒 */
-setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle(true) }, 3 * 1000);
+/* v133：启动这轮不算「手动」—— 以前传 true，开机自动同步一旦并入数据就刷新页面，
+   配合存储满时（写库静默失败）就是无限刷新；现在启动同步只提示不刷新。 */
+setTimeout(function () { if (mpSyncSettings().gAuto) syncCycle(false) }, 3 * 1000);
 setInterval(function () { if (mpSyncSettings().gAuto) syncCycle() }, 10 * 60 * 1000);
 /* 2.6.64 页面切到后台/关闭前强制同步一次，防「登记完立刻关页面」漏掉云端备份 */
 document.addEventListener('visibilitychange', function () {
